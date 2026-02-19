@@ -8,8 +8,10 @@ export enum EmailType {
 export interface SharedData {
   senderName: string;
   senderTitle: string;
+  senderEmail: string;
   hotelName: string;
   guestName: string;
+  guestEmail: string;
   confirmationNumber: string;
   arrivalDate: string;
   departureDate: string;
@@ -17,27 +19,28 @@ export interface SharedData {
 }
 
 export interface WelcomeEmailData extends SharedData {
-  stayReason: string; // e.g., Business, Leisure, Anniversary
-  highlights: string; // e.g., Complimentary Breakfast, Digital Key
+  stayReason: string;
+  highlights: string;
   personalNote: string;
 }
 
 export interface RecoveryEmailData extends SharedData {
-  stayDate: string; // Kept for reference, though arrival/departure covers this
+  stayDate: string;
   issueDescription: string;
-  resolutionOffered: string; // e.g., Refund, Points, Future discount
+  resolutionOffered: string;
   tone: 'Apologetic' | 'Formal' | 'Warm & Reassuring';
 }
 
 export interface LostFoundData extends SharedData {
   itemDescription: string;
-  whereFound: string; // e.g. Room 302, Pool
-  pickupInstructions: string; // e.g. Visit front desk, reply with address
+  whereFound: string;
+  pickupInstructions: string;
 }
 
 export interface CcAuthData extends SharedData {
-  authReason: string; // e.g. Third Party Billing, Advance Deposit
+  authReason: string;
   notes: string;
+  attachedFileName?: string;
 }
 
 export type FormData = WelcomeEmailData | RecoveryEmailData | LostFoundData | CcAuthData;
@@ -45,4 +48,21 @@ export type FormData = WelcomeEmailData | RecoveryEmailData | LostFoundData | Cc
 export interface GeneratedEmail {
   subject: string;
   body: string;
+}
+
+export interface SentEmail extends GeneratedEmail {
+  id: string;
+  timestamp: string;
+  recipientEmail: string;
+  recipientName: string;
+  status: 'Delivered' | 'Pending' | 'Failed';
+  attachment?: string;
+}
+
+export interface AppSettings {
+  defaultSenderName: string;
+  defaultSenderTitle: string;
+  defaultHotelName: string;
+  autoSaveEnabled: boolean;
+  highContrastMode: boolean;
 }

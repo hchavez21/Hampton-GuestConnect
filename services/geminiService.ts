@@ -1,6 +1,8 @@
+
 import { GoogleGenAI } from "@google/genai";
 import { EmailType, WelcomeEmailData, RecoveryEmailData, LostFoundData, CcAuthData, GeneratedEmail } from '../types';
 
+// Use the correct API client initialization with the environment variable.
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 export const generateEmailContent = async (
@@ -78,15 +80,16 @@ export const generateEmailContent = async (
         Reason for Form: ${d.authReason}
         Additional Notes: ${d.notes}
         
-        Body requirements: Explain clearly why the form is needed (security, third-party payment). Mention explicitly that the form is ATTACHED to this email. Put important instructions (like please return by date X or return via fax/secure link) in a <blockquote> tag.
+        Body requirements: Explain clearly why the form is needed (security, third-party payment). Mention explicitly that the form is ATTACHED to this email. Put important instructions (like please return by date X) in a <blockquote> tag.
       `;
       break;
     }
   }
 
   try {
+    // Upgraded model to gemini-3-flash-preview for text generation tasks per guidelines.
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-3-flash-preview',
       contents: prompt,
       config: {
         systemInstruction: systemInstruction,
@@ -94,6 +97,7 @@ export const generateEmailContent = async (
       },
     });
 
+    // Access the .text property directly.
     const jsonText = response.text;
     if (!jsonText) {
       throw new Error("No response from AI");

@@ -1,11 +1,27 @@
-import React, { useState } from 'react';
-import { GeneratedEmail, EmailType } from '../types';
-import { Copy, Check, Sparkles, Mail, Code, Eye, Phone } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { GeneratedEmail, EmailType, SentEmail } from '../types';
+import { 
+  Copy, 
+  Check, 
+  Sparkles, 
+  Mail, 
+  Code, 
+  Eye, 
+  Phone, 
+  Send, 
+  Loader2, 
+  CheckCircle2, 
+  Paperclip, 
+  RotateCcw,
+  ShieldCheck,
+  FileText
+} from 'lucide-react';
 
 interface OutputSectionProps {
   generatedEmail: GeneratedEmail | null;
   emailType: EmailType;
   guestName: string;
+  guestEmail: string;
   senderName: string;
   senderTitle: string;
   hotelName: string;
@@ -13,437 +29,292 @@ interface OutputSectionProps {
   arrivalDate?: string;
   departureDate?: string;
   roomNumber?: string;
+  onEmailSent: (email: SentEmail) => void;
+  isHistorical?: boolean;
+  onUndo?: () => void;
 }
 
 export const OutputSection: React.FC<OutputSectionProps> = ({ 
   generatedEmail, 
   emailType, 
   guestName,
+  guestEmail,
   senderName,
   senderTitle,
   hotelName,
   confirmationNumber,
   arrivalDate,
   departureDate,
-  roomNumber
+  roomNumber,
+  onEmailSent,
+  isHistorical = false,
+  onUndo
 }) => {
   const [copiedSubject, setCopiedSubject] = useState(false);
   const [copiedBody, setCopiedBody] = useState(false);
   const [showRawHtml, setShowRawHtml] = useState(false);
+  const [sendState, setSendState] = useState<'idle' | 'sending' | 'undo_window' | 'sent'>('idle');
+  const [undoCountdown, setUndoCountdown] = useState(5);
 
-  const blockquoteTitle = 
-    emailType === EmailType.RECOVERY ? 'SERVICE RECOVERY' : 
-    emailType === EmailType.LOST_FOUND ? 'ITEM DETAILS' : 
-    emailType === EmailType.CC_AUTH ? 'INSTRUCTIONS' : 
-    'STAY HIGHLIGHTS';
+  // Check if there's an attachment to display
+  const attachmentName = (generatedEmail as any)?.attachment || (generatedEmail as any)?.attachedFileName;
+
+  useEffect(() => {
+    if (sendState !== 'undo_window') return;
+    
+    if (undoCountdown > 0) {
+      const timer = setTimeout(() => setUndoCountdown(v => v - 1), 1000);
+      return () => clearTimeout(timer);
+    } else {
+      finalizeSend();
+    }
+  }, [sendState, undoCountdown]);
+
+  useEffect(() => {
+    setSendState('idle');
+    setUndoCountdown(5);
+  }, [generatedEmail]);
+
+  const blockquoteTitle = emailType === EmailType.CC_AUTH ? 'INSTRUCTIONS' : 'STAY HIGHLIGHTS';
+
+  const finalizeSend = () => {
+    if (!guestEmail || !generatedEmail) return;
+    
+    const sentEmail: SentEmail = {
+      id: Date.now().toString(),
+      timestamp: new Date().toLocaleString(),
+      recipientEmail: guestEmail,
+      recipientName: guestName,
+      subject: generatedEmail.subject,
+      body: generatedEmail.body,
+      status: 'Delivered'
+    };
+    
+    onEmailSent(sentEmail);
+    setSendState('sent');
+  };
+
+  const handleStartSend = () => {
+    setSendState('undo_window');
+    setUndoCountdown(5);
+  };
+
+  const handleUndoAction = () => {
+    setSendState('idle');
+    setUndoCountdown(5);
+  };
 
   const getFullHtml = (bodyText: string) => {
-    // Inject inline styles for the blockquote
     const styledBody = bodyText.replace(
       /<blockquote>/g, 
       `<blockquote style="background-color: #f8fafc; border-left: 4px solid #003da5; padding: 16px 20px; margin: 24px 0; border-radius: 0 4px 4px 0;">
        <div style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 11px; font-weight: 700; text-transform: uppercase; color: #64748b; margin-bottom: 8px; letter-spacing: 0.05em;">${blockquoteTitle}</div>`
     );
 
-    const hasReservationInfo = confirmationNumber || arrivalDate || departureDate || roomNumber;
     const title = senderTitle || 'General Manager';
 
-    // Reservation info block HTML
-    const reservationHtml = hasReservationInfo ? `
-      <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #f1f5f9; border-radius: 6px; margin-bottom: 30px;">
-        <tr>
-          <td style="padding: 16px 24px;">
-             <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%">
-                <tr>
-                   ${confirmationNumber ? `
-                   <td valign="top" style="padding-bottom: 6px; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 11px; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em;">Confirmation</td>
-                   ` : ''}
-                   ${roomNumber ? `
-                   <td valign="top" style="padding-bottom: 6px; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 11px; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em;">Room</td>
-                   ` : ''}
-                   ${arrivalDate ? `
-                   <td valign="top" style="padding-bottom: 6px; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 11px; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em;">Arrival</td>
-                   ` : ''}
-                   ${departureDate ? `
-                   <td valign="top" style="padding-bottom: 6px; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 11px; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em;">Departure</td>
-                   ` : ''}
-                </tr>
-                <tr>
-                   ${confirmationNumber ? `
-                   <td valign="top" style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 14px; font-weight: 600; color: #0f172a;">${confirmationNumber}</td>
-                   ` : ''}
-                   ${roomNumber ? `
-                   <td valign="top" style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 14px; font-weight: 600; color: #0f172a;">${roomNumber}</td>
-                   ` : ''}
-                   ${arrivalDate ? `
-                   <td valign="top" style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 14px; font-weight: 600; color: #0f172a;">${arrivalDate}</td>
-                   ` : ''}
-                   ${departureDate ? `
-                   <td valign="top" style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 14px; font-weight: 600; color: #0f172a;">${departureDate}</td>
-                   ` : ''}
-                </tr>
-             </table>
-          </td>
-        </tr>
-      </table>
-    ` : '';
-
-    return `
-<!DOCTYPE html>
-<html>
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>${generatedEmail?.subject || 'Hampton Email'}</title>
-</head>
-<body style="margin: 0; padding: 0; background-color: #f3f4f6; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;">
-  <!-- Main Background with subtle geometric hint -->
-  <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #f3f4f6; padding: 40px 20px;">
-    <tr>
-      <td align="center">
-        <!-- Card Container -->
-        <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="600" style="background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);">
-          
-          <!-- Header with Logo -->
-          <tr>
-            <td style="background-color: #ffffff; padding: 32px 40px 24px 40px; border-bottom: 3px solid #003da5;">
-              <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%">
-                <tr>
-                  <td align="left" valign="middle">
-                     <img src="https://stories-editor.hilton.com/wp-content/uploads/2024/03/Hampton-by-Hilton-Logo-Color.png?w=1224&q=75" alt="Hampton by Hilton Logo" width="120" style="display: block; border: 0; max-width: 100%; height: auto;" />
-                  </td>
-                  <td align="right" valign="middle">
-                    <span style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 11px; color: #64748b; font-weight: 500; letter-spacing: 0.5px;">GUEST SERVICES</span>
-                  </td>
-                </tr>
-              </table>
-            </td>
-          </tr>
-
-          <!-- Content Section -->
-          <tr>
-            <td style="padding: 40px 40px 40px 40px; color: #334155; line-height: 1.6; font-size: 16px;">
-              
-              ${reservationHtml}
-
-              ${styledBody}
-              
-              <!-- Signature -->
-              <div style="margin-top: 40px; padding-top: 30px; border-top: 1px solid #e2e8f0;">
-                <p style="margin: 0 0 4px 0; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; color: #64748b; font-size: 14px;">Sincerely,</p>
-                <p style="margin: 0; font-weight: bold; color: #003da5; font-size: 18px; font-family: Georgia, serif;">${senderName || 'General Manager'}</p>
-                <p style="margin: 4px 0 0 0; font-size: 11px; color: #94a3b8; text-transform: uppercase; letter-spacing: 1px; font-weight: 600;">${title}</p>
-              </div>
-
-              <!-- Contact Information -->
-              <div style="margin-top: 32px; background-color: #f8fafc; border-radius: 8px; padding: 24px; text-align: center;">
-                <p style="margin: 0 0 8px 0; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 16px; font-weight: 700; color: #334155;">Contact Information</p>
-                <p style="margin: 0 0 12px 0; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 14px; color: #64748b;">Hampton Inn Downtown Kansas City Financial District</p>
-                <p style="margin: 0; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 14px; color: #64748b;">
-                    <span style="display: inline-block; margin: 0 10px;">&#9742; 816-652-3160</span>
-                    <span style="display: inline-block; margin: 0 10px;">&#9993; hamptoninnmkcfd@gmail.com</span>
-                </p>
-              </div>
-            </td>
-          </tr>
-          
-          <!-- Footer Visual Treatment -->
-          <tr>
-            <td style="background-color: #f8fafc; padding: 16px 40px; border-top: 1px solid #f1f5f9;">
-               <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%">
-                 <tr>
-                   <td align="center">
-                      <p style="margin: 0; font-size: 11px; color: #94a3b8; font-weight: 500; letter-spacing: 0.5px;">100% HAMPTON GUARANTEE™</p>
-                   </td>
-                 </tr>
-               </table>
-            </td>
-          </tr>
-          <!-- Bottom Accent Line -->
-          <tr>
-            <td height="4" style="background-color: #003da5;"></td>
-          </tr>
-
-        </table>
-        
-        <!-- Space below email -->
-        <div style="height: 40px;"></div>
-      </td>
-    </tr>
-  </table>
-</body>
-</html>`;
+    return `<!DOCTYPE html><html><body style="margin: 0; padding: 0; background-color: #f3f4f6;">
+      <div style="max-width: 600px; margin: 40px auto; background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 10px rgba(0,0,0,0.1);">
+        <div style="padding: 30px; border-bottom: 3px solid #003da5; background-color: white;">
+          <img src="https://stories-editor.hilton.com/wp-content/uploads/2024/03/Hampton-by-Hilton-Logo-Color.png" width="120" />
+        </div>
+        <div style="padding: 40px; font-family: sans-serif; color: #334155;">
+          ${styledBody}
+          <div style="margin-top: 40px; border-top: 1px solid #eee; padding-top: 20px;">
+            <p style="margin: 0; font-weight: bold; color: #003da5;">${senderName || 'The Hampton Team'}</p>
+            <p style="margin: 0; font-size: 12px; color: #999;">${title}</p>
+          </div>
+        </div>
+      </div>
+    </body></html>`;
   };
 
   const copyToClipboard = async (text: string, isSubject: boolean) => {
-    if (isSubject) {
-      try {
+    try {
+      if (isSubject) {
         await navigator.clipboard.writeText(text);
         setCopiedSubject(true);
         setTimeout(() => setCopiedSubject(false), 2000);
-      } catch (err) {
-        console.error("Failed to copy subject", err);
-      }
-    } else {
-      try {
+      } else {
         const fullHtml = getFullHtml(text);
-        
         if (showRawHtml) {
-            await navigator.clipboard.writeText(fullHtml);
+          await navigator.clipboard.writeText(fullHtml);
         } else {
-            const htmlBlob = new Blob([fullHtml], { type: "text/html" });
-            const textBlob = new Blob([text], { type: "text/plain" }); 
-            const data = [new ClipboardItem({ 
-            "text/html": htmlBlob, 
-            "text/plain": textBlob 
-            })];
-            await navigator.clipboard.write(data);
+          const htmlBlob = new Blob([fullHtml], { type: "text/html" });
+          const data = [new ClipboardItem({ "text/html": htmlBlob, "text/plain": new Blob([text], {type: 'text/plain'}) })];
+          await navigator.clipboard.write(data);
         }
-
         setCopiedBody(true);
         setTimeout(() => setCopiedBody(false), 2000);
-      } catch (err) {
-        console.error("Copy failed", err);
       }
-    }
+    } catch (err) { console.error(err); }
   };
-
-  const getTheme = () => {
-    switch (emailType) {
-      case EmailType.RECOVERY: return { accent: 'text-red-600', bg: 'bg-red-50', badge: 'bg-red-100 text-red-700' };
-      case EmailType.LOST_FOUND: return { accent: 'text-amber-600', bg: 'bg-amber-50', badge: 'bg-amber-100 text-amber-700' };
-      case EmailType.CC_AUTH: return { accent: 'text-emerald-600', bg: 'bg-emerald-50', badge: 'bg-emerald-100 text-emerald-700' };
-      default: return { accent: 'text-blue-600', bg: 'bg-blue-50', badge: 'bg-blue-100 text-blue-700' };
-    }
-  };
-
-  const theme = getTheme();
-  
-  const hasReservationInfo = confirmationNumber || arrivalDate || departureDate || roomNumber;
-  const title = senderTitle || 'General Manager';
 
   if (!generatedEmail) {
     return (
-      <div className="bg-gray-50 rounded-xl border-2 border-dashed border-gray-300 h-full flex flex-col items-center justify-center text-gray-400 p-8">
-        <div className={`p-4 rounded-full ${theme.bg} mb-4`}>
-          <Sparkles className={`w-8 h-8 ${theme.accent}`} />
+      <div className="h-full flex flex-col items-center justify-center text-gray-300 bg-white rounded-[2rem] border border-gray-100 shadow-2xl shadow-gray-200/50">
+        <div className="bg-gray-50 p-8 rounded-full mb-6 border border-gray-100">
+          <Mail className="w-12 h-12 opacity-10" />
         </div>
-        <p className="text-lg font-medium">Ready to create</p>
-        <p className="text-sm text-center max-w-xs mt-2">
-          Fill out the details on the left and click Generate.
-        </p>
+        <p className="text-xl font-black tracking-tight uppercase text-gray-200">Terminal</p>
+        <p className="text-[10px] mt-2 font-bold uppercase tracking-[0.2em]">Awaiting Generation</p>
       </div>
     );
   }
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-200 h-full flex flex-col overflow-hidden">
-      <div className="p-4 border-b border-gray-100 flex items-center justify-between bg-gray-50">
-        <h3 className="font-semibold text-gray-700 flex items-center gap-2">
-          <Mail className="w-4 h-4" /> Email Preview
-        </h3>
-        <span className={`text-xs font-medium px-2 py-1 rounded-full ${theme.badge}`}>
-          {emailType}
-        </span>
-      </div>
+    <div className="flex flex-col h-full bg-white rounded-[2rem] shadow-2xl border border-gray-100 overflow-hidden animate-in fade-in duration-700">
+      {/* Client Toolbar */}
+      <header className="p-4 bg-white border-b border-gray-50 flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          {isHistorical && (
+            <div className="flex items-center gap-2 bg-green-50 text-green-700 px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest ring-1 ring-green-100">
+              <ShieldCheck className="w-3.5 h-3.5" /> Logged
+            </div>
+          )}
+          {!isHistorical && sendState === 'idle' && (
+            <button 
+              onClick={handleStartSend}
+              disabled={!guestEmail}
+              className="bg-[#002d72] text-[#fdb913] px-8 py-2.5 rounded-full font-black text-xs uppercase tracking-widest shadow-xl shadow-blue-900/20 hover:bg-[#001e4d] hover:-translate-y-0.5 active:translate-y-0 transition-all flex items-center gap-3 disabled:opacity-50"
+            >
+              <Send className="w-4 h-4" /> Send Message
+            </button>
+          )}
+          {sendState === 'undo_window' && (
+            <div className="flex items-center gap-4">
+               <div className="flex items-center gap-3 bg-blue-50 text-blue-700 px-5 py-2.5 rounded-full text-xs font-black uppercase tracking-widest">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Transmit in {undoCountdown}s
+               </div>
+               <button 
+                onClick={handleUndoAction}
+                className="flex items-center gap-1.5 text-xs font-black text-red-500 uppercase tracking-widest hover:bg-red-50 px-5 py-2.5 rounded-full transition-all"
+               >
+                  <RotateCcw className="w-4 h-4" /> Undo
+               </button>
+            </div>
+          )}
+          {sendState === 'sent' && (
+             <div className="flex items-center gap-3 bg-green-50 text-green-700 px-6 py-2.5 rounded-full text-xs font-black uppercase tracking-widest animate-in zoom-in border border-green-100">
+                <CheckCircle2 className="w-4 h-4" /> Delivered
+             </div>
+          )}
+        </div>
 
-      <div className="flex-grow overflow-y-auto p-6 space-y-6 bg-gray-100">
-        
-        {/* Subject Line Block */}
-        <div className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm space-y-2">
+        <div className="flex items-center gap-2">
+          <div className="h-6 w-[1px] bg-gray-100 mx-2"></div>
+          <button 
+            onClick={() => setShowRawHtml(!showRawHtml)}
+            className="flex items-center gap-2 px-4 py-2 text-[10px] font-black uppercase tracking-[0.2em] text-gray-400 hover:text-[#002d72] transition-all"
+          >
+            {showRawHtml ? <Eye className="w-4 h-4" /> : <Code className="w-4 h-4" />}
+            {showRawHtml ? 'Preview' : 'HTML'}
+          </button>
+        </div>
+      </header>
+
+      {/* Message Header */}
+      <div className="p-8 bg-gray-50/30 border-b border-gray-50 space-y-4">
+        <div className="grid grid-cols-[80px_1fr] items-center">
+          <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">From</span>
+          <span className="text-xs font-bold text-gray-500">hamptoninnmkcfd@gmail.com</span>
+        </div>
+        <div className="grid grid-cols-[80px_1fr] items-center">
+          <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">To</span>
+          <span className="text-xs font-black text-[#002d72] truncate tracking-tight">{guestName} &lt;{guestEmail}&gt;</span>
+        </div>
+        <div className="grid grid-cols-[80px_1fr] items-center pt-2 border-t border-gray-100">
+          <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Subject</span>
           <div className="flex items-center justify-between">
-            <label className="text-xs uppercase tracking-wider font-semibold text-gray-500">Subject Line</label>
+            <span className="text-sm font-black text-gray-900 tracking-tight">{generatedEmail.subject}</span>
             <button 
               onClick={() => copyToClipboard(generatedEmail.subject, true)}
-              className="text-xs flex items-center gap-1 text-gray-500 hover:text-blue-600 transition-colors font-medium"
+              className="text-[9px] font-black text-blue-600 uppercase tracking-widest hover:underline"
             >
-              {copiedSubject ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
-              {copiedSubject ? 'Copied' : 'Copy Text'}
+              {copiedSubject ? 'Copied' : 'Copy'}
             </button>
-          </div>
-          <div className="text-gray-900 font-medium text-lg">
-            {generatedEmail.subject}
           </div>
         </div>
 
-        {/* Email Content Area */}
-        <div>
-          <div className="flex items-center justify-between mb-2 px-1">
-             <div className="flex items-center gap-3">
-                 <label className="text-xs uppercase tracking-wider font-semibold text-gray-500">
-                     {showRawHtml ? 'HTML Source Code' : 'Formatted Preview'}
-                 </label>
-                 <button 
-                    onClick={() => setShowRawHtml(!showRawHtml)}
-                    className="flex items-center gap-1.5 px-2 py-1 text-xs font-medium text-gray-600 bg-white border border-gray-300 rounded hover:bg-gray-50 transition-colors shadow-sm"
-                    title={showRawHtml ? "Switch to Visual Preview" : "Switch to Code View"}
-                 >
-                    {showRawHtml ? (
-                        <>
-                           <Eye className="w-3 h-3" /> Show Preview
-                        </>
-                    ) : (
-                        <>
-                            <Code className="w-3 h-3" /> Show HTML
-                        </>
-                    )}
-                 </button>
-             </div>
-             
-             <button 
-              onClick={() => copyToClipboard(generatedEmail.body, false)}
-              className="text-xs flex items-center gap-1 text-gray-500 hover:text-blue-600 transition-colors font-medium"
-            >
-              {copiedBody ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
-              {copiedBody ? 'Copied' : (showRawHtml ? 'Copy Code' : 'Copy Formatted')}
-            </button>
+        {/* Attachment Display */}
+        {attachmentName && (
+          <div className="grid grid-cols-[80px_1fr] items-center pt-2 border-t border-gray-100">
+            <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">File</span>
+            <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-lg border border-gray-100 inline-flex w-fit shadow-sm">
+              <FileText className="w-3.5 h-3.5 text-blue-600" />
+              <span className="text-[10px] font-bold text-gray-600">{attachmentName}</span>
+              <span className="text-[8px] font-black text-blue-400 uppercase bg-blue-50 px-1 rounded-sm ml-2">PDF</span>
+            </div>
           </div>
-          
-          {showRawHtml ? (
-              // Raw HTML View
-              <div className="bg-[#282c34] rounded-xl overflow-hidden shadow-lg border border-gray-700 flex flex-col">
-                  <div className="bg-[#21252b] px-4 py-2 text-gray-400 text-xs flex items-center gap-2 border-b border-white/10 select-none">
-                      <Code className="w-3 h-3" /> email-template.html
+        )}
+      </div>
+
+      {/* Main Viewport */}
+      <div className="flex-grow overflow-y-auto bg-white p-8 lg:p-12 custom-scrollbar relative">
+        {showRawHtml ? (
+          <textarea 
+            readOnly
+            value={getFullHtml(generatedEmail.body)}
+            className="w-full h-full font-mono text-[10px] p-8 bg-slate-900 text-blue-200/80 rounded-3xl resize-none outline-none border border-slate-800 leading-relaxed"
+          />
+        ) : (
+          <div className="max-w-[650px] mx-auto pb-20">
+            <div className="border border-gray-100 rounded-3xl overflow-hidden shadow-2xl shadow-gray-200/20 bg-white">
+               <div className="p-10 border-b-[4px] border-[#003da5]">
+                 <img src="https://stories-editor.hilton.com/wp-content/uploads/2024/03/Hampton-by-Hilton-Logo-Color.png" className="h-8" alt="Hampton Logo" />
+               </div>
+               
+               <div className="p-10 lg:p-16 email-body-render text-slate-700 leading-relaxed text-[16px]">
+                  <div dangerouslySetInnerHTML={{ __html: generatedEmail.body }} />
+                  
+                  <div className="mt-16 pt-10 border-t border-gray-50 flex justify-between items-end">
+                    <div>
+                      <p className="text-xs text-gray-400 mb-2 font-black uppercase tracking-widest">Best regards,</p>
+                      <p className="text-2xl font-black text-[#003da5] tracking-tighter">{senderName || 'Hampton Ambassador'}</p>
+                      <p className="text-[9px] font-black text-gray-400 uppercase tracking-[0.3em] mt-2">{senderTitle || 'Guest Relations'}</p>
+                    </div>
+                    <div className="opacity-10 grayscale brightness-0">
+                       <img src="https://stories-editor.hilton.com/wp-content/uploads/2024/03/Hampton-by-Hilton-Logo-Color.png" className="h-6" alt="Ghost Logo" />
+                    </div>
                   </div>
-                  <textarea 
-                    readOnly
-                    value={getFullHtml(generatedEmail.body).trim()}
-                    className="w-full h-[600px] p-4 font-mono text-[11px] leading-relaxed text-gray-300 bg-[#282c34] resize-none focus:outline-none custom-scrollbar"
-                    style={{ whiteSpace: 'pre' }}
-                    spellCheck={false}
-                  />
-              </div>
-          ) : (
-              // Formatted Preview View
-              <div className="email-preview-wrapper bg-slate-100 py-8 font-sans text-gray-800 rounded-lg">
-                 {/* Card Container */}
-                 <div className="bg-white max-w-[600px] mx-auto rounded-lg overflow-hidden shadow-md">
-                    
-                    {/* Header */}
-                    <div className="bg-white px-10 pt-8 pb-6 border-b-[3px] border-[#003da5] flex justify-between items-center">
-                        <img 
-                            src="https://stories-editor.hilton.com/wp-content/uploads/2024/03/Hampton-by-Hilton-Logo-Color.png?w=1224&q=75" 
-                            alt="Hampton by Hilton Logo" 
-                            className="h-16 w-auto object-contain"
-                        />
-                         <span className="text-[10px] text-slate-400 font-medium tracking-widest uppercase">Guest Services</span>
-                    </div>
+               </div>
 
-                    {/* Body Content */}
-                    <div className="p-10 pb-6">
-                        {/* Reservation Details */}
-                        {hasReservationInfo && (
-                           <div className="bg-slate-50 rounded-md p-5 mb-8">
-                             <div className="grid grid-cols-4 gap-4 text-[10px] text-slate-500 uppercase tracking-wider font-bold mb-1.5">
-                                {confirmationNumber && <div>Confirmation</div>}
-                                {roomNumber && <div>Room</div>}
-                                {arrivalDate && <div>Arrival</div>}
-                                {departureDate && <div>Departure</div>}
-                             </div>
-                             <div className="grid grid-cols-4 gap-4 text-sm font-semibold text-slate-800">
-                                {confirmationNumber && <div>{confirmationNumber}</div>}
-                                {roomNumber && <div>{roomNumber}</div>}
-                                {arrivalDate && <div>{arrivalDate}</div>}
-                                {departureDate && <div>{departureDate}</div>}
-                             </div>
-                           </div>
-                        )}
-
-                        <div 
-                            className={`email-body-content text-[16px] leading-relaxed text-slate-700 ${emailType.toLowerCase()}`}
-                            dangerouslySetInnerHTML={{ __html: generatedEmail.body }}
-                        />
-
-                        {/* Signature */}
-                        <div className="mt-10 pt-8 border-t border-slate-100">
-                            <p className="text-sm text-slate-500 mb-2">Sincerely,</p>
-                            <p className="font-bold text-lg text-[#003da5] font-serif">{senderName || 'Jordan Smith'}</p>
-                            <p className="text-[10px] text-slate-400 uppercase tracking-widest font-bold mt-1">{title}</p>
-                        </div>
-
-                         {/* Contact Information */}
-                         <div className="bg-slate-50 rounded-lg p-6 text-center mt-8 border border-slate-100">
-                            <h4 className="text-base font-bold text-slate-700 mb-2">Contact Information</h4>
-                            <p className="text-sm text-slate-500 mb-3">Hampton Inn Downtown Kansas City Financial District</p>
-                            <div className="flex items-center justify-center gap-6 text-sm text-slate-500">
-                                <span className="flex items-center gap-1.5"><Phone className="w-4 h-4" /> 816-652-3160</span>
-                                <span className="flex items-center gap-1.5"><Mail className="w-4 h-4" /> hamptoninnmkcfd@gmail.com</span>
-                            </div>
-                         </div>
-                    </div>
-
-                    {/* Footer Visual Treatment */}
-                    <div className="bg-slate-50 px-10 py-4 border-t border-slate-100 flex justify-center">
-                        <p className="text-[10px] font-bold text-slate-400 tracking-widest uppercase">100% Hampton Guarantee™</p>
-                    </div>
-                    {/* Bottom Accent */}
-                    <div className="h-1 bg-[#003da5]"></div>
-
-                 </div>
-              </div>
-          )}
-
-        </div>
-
+               <div className="bg-gray-50/40 p-6 text-center border-t border-gray-50">
+                  <div className="flex items-center justify-center gap-3">
+                    <span className="text-[8px] font-black text-gray-300 tracking-[0.4em] uppercase">Authentic • Caring • Thoughtful</span>
+                  </div>
+               </div>
+            </div>
+            
+            <div className="mt-12 flex justify-center gap-4">
+              <button 
+                onClick={() => copyToClipboard(generatedEmail.body, false)}
+                className="flex items-center gap-3 px-8 py-3 text-[10px] font-black uppercase tracking-widest text-gray-400 hover:text-[#002d72] bg-white border border-gray-100 rounded-full shadow-lg hover:shadow-xl transition-all"
+              >
+                {copiedBody ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
+                {copiedBody ? 'Copied Content' : 'Copy Content'}
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       <style>{`
-        .email-body-content h3 {
-          font-weight: 700;
-          font-size: 1.25rem;
-          color: #0f172a;
-          margin-bottom: 1.25rem;
-          margin-top: 0;
-          letter-spacing: -0.01em;
+        .email-body-render h3 { font-size: 1.8rem; font-weight: 900; color: #002d72; margin-bottom: 2rem; letter-spacing: -0.04em; line-height: 1.1; }
+        .email-body-render p { margin-bottom: 1.5rem; line-height: 1.7; }
+        .email-body-render blockquote {
+          background-color: #f8fafc; border-left: 6px solid #003da5; padding: 2.2rem; margin: 2.5rem 0; border-radius: 0 16px 16px 0;
+          font-style: italic; color: #334155; position: relative; border-bottom: 1px solid #f1f5f9; border-top: 1px solid #f1f5f9;
         }
-        .email-body-content p {
-          margin-bottom: 1.15rem;
+        .email-body-render blockquote::before {
+          content: '${blockquoteTitle}'; display: block; font-style: normal; font-size: 9px; font-weight: 900; 
+          text-transform: uppercase; color: #002d72; margin-bottom: 1rem; letter-spacing: 0.2em; opacity: 0.4;
         }
-        /* Visual Preview Blockquote */
-        .email-body-content blockquote {
-          background-color: #f8fafc; 
-          border-left: 4px solid #003da5; 
-          padding: 1.25rem 1.5rem;
-          margin: 1.5rem 0;
-          border-radius: 0 4px 4px 0;
-          position: relative;
-        }
-        .email-body-content blockquote::before {
-          content: '${blockquoteTitle}';
-          display: block;
-          font-size: 10px;
-          font-weight: 700;
-          text-transform: uppercase;
-          color: #64748b;
-          margin-bottom: 0.5rem;
-          letter-spacing: 0.05em;
-        }
-        .email-body-content strong {
-          color: #003da5; 
-          font-weight: 600;
-        }
-        .email-body-content ul {
-          list-style-type: disc;
-          padding-left: 1.5rem;
-          margin-bottom: 1rem;
-        }
-        .email-body-content li {
-          margin-bottom: 0.25rem;
-        }
-        .custom-scrollbar::-webkit-scrollbar {
-          width: 8px;
-          height: 8px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-track {
-          background: #21252b; 
-        }
-        .custom-scrollbar::-webkit-scrollbar-thumb {
-          background: #4b5563; 
-          border-radius: 4px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-          background: #6b7280; 
-        }
+        .email-body-render strong { color: #002d72; font-weight: 900; }
+        .email-body-render ul { list-style: none; padding-left: 0.5rem; margin-bottom: 2rem; }
+        .email-body-render li { margin-bottom: 0.8rem; position: relative; padding-left: 1.5rem; }
+        .email-body-render li::before { content: '•'; color: #003da5; font-weight: 900; position: absolute; left: 0; }
       `}</style>
     </div>
   );
